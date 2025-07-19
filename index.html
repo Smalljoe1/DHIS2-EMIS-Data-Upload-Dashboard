@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DHIS2 EMIS Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const ReactRecharts = window.Recharts;
+    const App = () => {
+      const [datasets, setDatasets] = useState([]);
+      const [users, setUsers] = useState([]);
+      const [report, setReport] = useState([]);
+      const [violations, setViolations] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState(null);
+      const [filterLGA, setFilterLGA] = useState("");
+      const [filterOrgUnit, setFilterOrgUnit] = useState("");
+      const [sortField, setSortField] = useState("School Name");
+      const [sortOrder, setSortOrder] = useState("asc");
+      const [selectedState, setSelectedState] = useState("LEVEL-st3hrLkzuMb;FHlOerryBjk");
+      const [message, setMessage] = useState("");
+      const [batchSize, setBatchSize] = useState(10); // Default batch size
+      const [fetchViolations, setFetchViolations] = useState(false); // New state to trigger violations fetch
+      const [showTables, setShowTables] = useState(true); // New state to toggle table visibility
+
+      const stateOptions = [
+        { uid: "LEVEL-st3hrLkzuMb;FHlOerryBjk", name: "ab Abia State" },
+        { uid: "LEVEL-st3hrLkzuMb;OgjFloqKoqk", name: "ad Adamawa State" },
+        { uid: "LEVEL-st3hrLkzuMb;qLiKWoddwFu", name: "ak Akwa-Ibom State" },
+        { uid: "LEVEL-st3hrLkzuMb;Nko8QFDmYmq", name: "an Anambra state" },
+        { uid: "LEVEL-st3hrLkzuMb;ziJ3yxfgb3m", name: "ba Bauchi State" },
+        { uid: "LEVEL-st3hrLkzuMb;MXrZyuS9E7A", name: "be Benue State" },
+        { uid: "LEVEL-st3hrLkzuMb;RLySnRCE1Gy", name: "bo Borno State" },
+        { uid: "LEVEL-st3hrLkzuMb;ns3vF75Y0bF", name: "by Bayelsa State" },
+        { uid: "LEVEL-st3hrLkzuMb;caG44DzHu6F", name: "cr Cross River State" },
+        { uid: "LEVEL-st3hrLkzuMb;m0rZG06GdPe", name: "de Delta State" },
+        { uid: "LEVEL-st3hrLkzuMb;xWSEoKmrbBW", name: "eb Ebonyi State" },
+        { uid: "LEVEL-st3hrLkzuMb;aMQcvAoEFh0", name: "ed Edo State" },
+        { uid: "LEVEL-st3hrLkzuMb;iilma7EajGc", name: "ek Ekiti State" },
+        { uid: "LEVEL-st3hrLkzuMb;Quac4RHRtaZ", name: "en Enugu State" },
+        { uid: "LEVEL-st3hrLkzuMb;HYCMnXqLDPV", name: "fc Federal Capital Territory" },
+        { uid: "LEVEL-st3hrLkzuMb;bSfaEpPFa9Y", name: "go Gombe State" },
+        { uid: "LEVEL-st3hrLkzuMb;FmOhtDnhdwU", name: "im Imo State" },
+        { uid: "LEVEL-st3hrLkzuMb;MJVVi73YayJ", name: "ji Jigawa State" },
+        { uid: "LEVEL-st3hrLkzuMb;tjLatcokcel", name: "kd Kaduna State" },
+        { uid: "LEVEL-st3hrLkzuMb;M689V9w3Gs3", name: "ke Kebbi State" },
+        { uid: "LEVEL-st3hrLkzuMb;cTIw3RXOLCQ", name: "kn Kano State" },
+        { uid: "LEVEL-st3hrLkzuMb;S7Vs7ifJKlh", name: "ko Kogi State" },
+        { uid: "LEVEL-st3hrLkzuMb;uKlacgs9ykR", name: "kt Katsina State" },
+        { uid: "LEVEL-st3hrLkzuMb;jReUW6NCPkL", name: "kw Kwara State" },
+        { uid: "LEVEL-st3hrLkzuMb;H2ZhSMudlMI", name: "la Lagos State" },
+        { uid: "LEVEL-st3hrLkzuMb;gzLOszDWdqM", name: "na Nasarawa State" },
+        { uid: "LEVEL-st3hrLkzuMb;RYEnw3sMDyE", name: "ni Niger State" },
+        { uid: "LEVEL-st3hrLkzuMb;fBInDsbaQHO", name: "og Ogun State" },
+        { uid: "LEVEL-st3hrLkzuMb;r3IK5qdHsZ6", name: "on Ondo State" },
+        { uid: "LEVEL-st3hrLkzuMb;hfNPq5F4mjr", name: "os Osun State" },
+        { uid: "LEVEL-st3hrLkzuMb;yx3QJHm86vW", name: "oy Oyo State" },
+        { uid: "LEVEL-st3hrLkzuMb;TFY8aaVkCtV", name: "pl Plateau State" },
+        { uid: "LEVEL-st3hrLkzuMb;BmWTbiMgEai", name: "ri Rivers State" },
+        { uid: "LEVEL-st3hrLkzuMb;Gq37IyyjUfj", name: "so Sokoto State" },
+        { uid: "LEVEL-st3hrLkzuMb;jXngIDniC8t", name: "ta Taraba State" },
+        { uid: "LEVEL-st3hrLkzuMb;Ym1fEhWFWYI", name: "yo Yobe State" },
+        { uid: "LEVEL-st3hrLkzuMb;FmH6buccgqx", name: "za Zamfara State" }
+      ];
+
+      const fetchData = async (url, setter, orgUnits = null, label = '') => {
+        setLoading(true);
+        setError(null);
+        setMessage('');
+        try {
+          let queryString = '';
+          if (orgUnits) queryString += `?orgUnits=${orgUnits}`;
+          if (url === '/api/violations') queryString += (queryString ? '&' : '?') + `batchSize=${batchSize}`;
+          const response = await axios.get(`http://localhost:5000${url}${queryString}`);
+          const data = response.data;
+          if (url === '/api/report' && data.report) {
+            setter(data.report);
+            setViolations([]); // Reset violations until explicitly fetched
+          } else if (url === '/api/violations' && data.violations) {
+            setViolations(data.violations);
+          } else {
+            setter(data);
+          }
+          if (label) {
+            setMessage(`${label} fetched successfully for ${stateOptions.find(s => s.uid === selectedState)?.name || "selected state"}`);
+          }
+        } catch (err) {
+          setError('Failed to fetch data: ' + err.message);
+          console.error('Fetch error:', err);
+        }
+        setLoading(false);
+      };
+
+      const handleFetchDatasets = () => fetchData('/api/datasets', setDatasets, selectedState, 'Datasets');
+      const handleFetchUsers = () => fetchData('/api/users', setUsers, null, 'Users');
+      const handleFetchReport = () => fetchData('/api/report', setReport, null, 'Report');
+      const handleFetchViolations = () => {
+        if (report.length > 0) {
+          fetchData('/api/violations', setViolations, null, 'Violations');
+        } else {
+          setError('Please fetch the report first.');
+        }
+      };
+
+      const filteredReport = report
+        .filter(row => 
+          (filterLGA ? row.LGA.toLowerCase().includes(filterLGA.toLowerCase()) : true) &&
+          (filterOrgUnit ? row["School Name"].toLowerCase().includes(filterOrgUnit.toLowerCase()) : true)
+        )
+        .sort((a, b) => {
+          const valueA = a[sortField], valueB = b[sortField];
+          if (sortField === 'User Count') return sortOrder === 'asc' ? valueA - valueB : valueB - valueA;
+          return sortOrder === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
+        });
+
+      const handleSort = (field) => {
+        setSortField(field);
+        setSortOrder(sortField === field && sortOrder === 'asc' ? 'desc' : 'asc');
+      };
+
+      const getStatusColor = (status) => {
+        if (status.includes("✅")) return "bg-green-100";
+        if (status.includes("⚠️")) return "bg-yellow-100";
+        if (status.includes("❌")) return "bg-red-100";
+        if (status.includes("🚫")) return "bg-gray-200";
+        return "bg-gray-100";
+      };
+
+      // General Statistics Functions
+      const getQuickStats = () => {
+        if (filteredReport.length === 0) return {
+          totalSchools: 0,
+          completionRate: 0,
+          activeUsers: 0,
+          pendingUploads: 0,
+          fullyCompletedDatasets: 0,
+          usersNoLogin: 0,
+          usersNoAccess: 0,
+          allUsersWithLogin: 0,
+          usersWithUploads: 0,
+          totalViolations: 0
+        };
+
+        const currentDate = new Date('2025-07-19T11:00:00Z'); // 11:00 AM WAT
+        const reportingPeriodStart = new Date(currentDate.setDate(currentDate.getDate() - 30)).toISOString().split('T')[0]; // June 19, 2025
+
+        const uniqueSchools = new Set(filteredReport.map(row => row["School Name"])).size;
+        const completedSchools = filteredReport.filter(row => row.Status.startsWith("✅")).length;
+        const completionRate = ((completedSchools / uniqueSchools) * 100).toFixed(1) || 0;
+        const activeUsers = new Set(filteredReport
+          .filter(row => row["Last Login"] && new Date(row["Last Login"]) >= new Date(reportingPeriodStart))
+          .flatMap(row => row.Usernames ? row.Usernames.split(',').map(name => name.trim()) : []))
+          .size;
+        const pendingUploads = filteredReport.filter(row => row.Status.startsWith("⚠️")).length;
+        const usersNoLogin = filteredReport
+          .filter(row => row.Status.startsWith("❌"))
+          .reduce((sum, row) => sum + (row["User Count"] || 0), 0);
+        const usersNoAccess = new Set(filteredReport
+          .filter(row => row.Status.startsWith("🚫"))
+          .map(row => row["School Name"])).size;
+        const allUsersWithLogin = filteredReport
+          .filter(row => row.Status.startsWith("✅") || row.Status.startsWith("⚠️"))
+          .reduce((sum, row) => sum + (row["User Count"] || 0), 0);
+        const usersWithUploads = filteredReport
+          .filter(row => row.Status.startsWith("✅"))
+          .reduce((sum, row) => sum + (row["User Count"] || 0), 0);
+        const datasetCompletion = {};
+        filteredReport.forEach(row => {
+          const dataset = row.datasets_name;
+          if (!datasetCompletion[dataset]) datasetCompletion[dataset] = { total: 0, completed: 0 };
+          datasetCompletion[dataset].total += 1;
+          if (row.Status.startsWith("✅")) datasetCompletion[dataset].completed += 1;
+        });
+        const fullyCompletedDatasets = Object.values(datasetCompletion)
+          .filter(data => data.completed === data.total)
+          .length;
+        const totalViolations = violations.length;
+
+        return {
+          totalSchools: uniqueSchools,
+          completionRate,
+          activeUsers,
+          pendingUploads,
+          fullyCompletedDatasets,
+          usersNoLogin,
+          usersNoAccess,
+          allUsersWithLogin,
+          usersWithUploads,
+          totalViolations
+        };
+      };
+
+      // Violation Statistics by OU
+      const getViolationStats = () => {
+        if (violations.length === 0) return [];
+
+        const violationCounts = violations.reduce((acc, violation) => {
+          const schoolId = violation["School ID"];
+          acc[schoolId] = (acc[schoolId] || 0) + 1;
+          return acc;
+        }, {});
+
+        return Object.entries(violationCounts)
+          .map(([schoolId, count]) => ({
+            schoolId,
+            count,
+            schoolName: violations.find(v => v["School ID"] === schoolId)["School Name"]
+          }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5); // Top 5 OUs with most violations
+      };
+
+      const quickStats = getQuickStats();
+      const violationStats = getViolationStats();
+
+      // Remove automatic fetch on mount
+      useEffect(() => {}, [selectedState, batchSize]);
+
+      return (
+        <div className="container mx-auto p-4">
+          <h1 className="text-2xl font-bold mb-4">DHIS2 EMIS Data Upload Dashboard</h1>
+          {message && <p className="text-green-600 mb-2">{message}</p>}
+          {error && <p className="text-red-500 mb-2">{error}</p>}
+          {loading && <p>Loading...</p>}
+          {!error && !loading && report.length === 0 && (
+            <p className="mb-2">
+              No data available for {stateOptions.find(option => option.uid === selectedState)?.name || 'the selected state'}. Please fetch datasets and report.
+            </p>
+          )}
+
+          <div className="flex justify-between items-center mb-4 space-y-2">
+            <div>
+              <label htmlFor="stateSelect" className="mr-2">Select State:</label>
+              <select
+                id="stateSelect"
+                value={selectedState}
+                onChange={(e) => setSelectedState(e.target.value)}
+                className="border p-2 rounded"
+              >
+                {stateOptions.map(option => (
+                  <option key={option.uid} value={option.uid}>{option.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex space-x-2">
+              <div>
+                <label htmlFor="batchSizeSelect" className="mr-2">Batch Size:</label>
+                <select
+                  id="batchSizeSelect"
+                  value={batchSize}
+                  onChange={(e) => setBatchSize(parseInt(e.target.value))}
+                  className="border p-2 rounded"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="15">15</option>
+                </select>
+              </div>
+              <button onClick={handleFetchDatasets} className="bg-blue-500 text-white p-2 rounded">Fetch Datasets</button>
+              <button onClick={handleFetchUsers} className="bg-blue-500 text-white p-2 rounded">Fetch Users</button>
+              <button onClick={handleFetchReport} className="bg-blue-500 text-white p-2 rounded">Fetch Report</button>
+              <button
+                onClick={handleFetchViolations}
+                className="bg-blue-500 text-white p-2 rounded"
+                disabled={loading || report.length === 0}
+              >
+                Fetch Violations
+              </button>
+              <button
+                onClick={() => setShowTables(!showTables)}
+                className="bg-gray-500 text-white p-2 rounded"
+              >
+                {showTables ? "Hide Tables" : "Show Tables"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-4 space-y-2">
+            <input
+              type="text"
+              placeholder="Filter by LGA"
+              className="border p-2 rounded w-full md:w-1/2"
+              value={filterLGA}
+              onChange={(e) => setFilterLGA(e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder="Filter by Organization Unit (School Name)"
+              className="border p-2 rounded w-full md:w-1/2"
+              value={filterOrgUnit}
+              onChange={(e) => setFilterOrgUnit(e.target.value)}
+            />
+          </div>
+
+          {/* Quick Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Total Schools</h3>
+              <p className="text-2xl font-bold text-blue-600">{quickStats.totalSchools}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Upload Completion Rate</h3>
+              <p className="text-2xl font-bold text-green-600">{quickStats.completionRate}%</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Active Users</h3>
+              <p className="text-2xl font-bold text-purple-600">{quickStats.activeUsers}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Pending Uploads</h3>
+              <p className="text-2xl font-bold text-yellow-600">{quickStats.pendingUploads}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Fully Completed Datasets</h3>
+              <p className="text-2xl font-bold text-indigo-600">{quickStats.fullyCompletedDatasets}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Users with Access, No Login</h3>
+              <p className="text-2xl font-bold text-red-600">{quickStats.usersNoLogin}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Users with No Login Access</h3>
+              <p className="text-2xl font-bold text-gray-600">{quickStats.usersNoAccess}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">All Users with Login Access</h3>
+              <p className="text-2xl font-bold text-teal-600">{quickStats.allUsersWithLogin}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Users with Uploads</h3>
+              <p className="text-2xl font-bold text-green-700">{quickStats.usersWithUploads}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Total Validation Violations</h3>
+              <p className="text-2xl font-bold text-red-600">{quickStats.totalViolations}</p>
+            </div>
+          </div>
+
+          {/* Violation Statistics by OU */}
+          <div className="mb-8">
+            <h2 className="text-xl font-bold mb-2">Top 5 OUs with Validation Violations</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {violationStats.map((stat, index) => (
+                <div key={index} className="bg-white p-4 rounded-lg shadow border border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-700">OU: {stat.schoolName} ({stat.schoolId})</h3>
+                  <p className="text-2xl font-bold text-red-600">{stat.count}</p>
+                  <p className="text-sm text-gray-500">Violations</p>
+                </div>
+              ))}
+              {violationStats.length === 0 && (
+                <p className="text-gray-500">No violations recorded.</p>
+              )}
+            </div>
+          </div>
+
+          {showTables && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full border">
+                <thead className="bg-gray-200">
+                  <tr>
+                    {["State", "LGA", "Ward", "School ID", "School Name", "Dataset Name", "Status", "User Count", "Usernames", "Last Login"].map(field => (
+                      <th
+                        key={field}
+                        className="border p-2 cursor-pointer"
+                        onClick={() => handleSort(field)}
+                      >
+                        {field} {sortField === field && (sortOrder === 'asc' ? '↑' : '↓')}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReport.map((row, index) => (
+                    <tr key={index} className={getStatusColor(row.Status)}>
+                      <td className="border p-2">{row.State}</td>
+                      <td className="border p-2">{row.LGA}</td>
+                      <td className="border p-2">{row.Ward}</td>
+                      <td className="border p-2">{row["School ID"]}</td>
+                      <td className="border p-2">{row["School Name"]}</td>
+                      <td className="border p-2">{row.datasets_name}</td>
+                      <td className="border p-2">{row.Status}</td>
+                      <td className="border p-2">{row["User Count"]}</td>
+                      <td className="border p-2">{row.Usernames}</td>
+                      <td className="border p-2">{row["Last Login"] || 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {showTables && violations.length > 0 && (
+            <div className="mt-4 overflow-x-auto">
+              <h2 className="text-xl font-bold mb-2">Validation Violations</h2>
+              <table className="min-w-full border">
+                <thead className="bg-gray-200">
+                  <tr>
+                    {["School ID", "School Name", "Dataset UID", "Period", "Validation Rule Name", "Left Side Value", "Right Side Value", "Importance"].map(field => (
+                      <th key={field} className="border p-2">{field}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {violations.map((row, index) => (
+                    <tr key={index} className="bg-yellow-100">
+                      <td className="border p-2">{row["School ID"]}</td>
+                      <td className="border p-2">{row["School Name"]}</td>
+                      <td className="border p-2">{row["Dataset UID"]}</td>
+                      <td className="border p-2">{row.Period}</td>
+                      <td className="border p-2">{row["Validation Rule Name"]}</td>
+                      <td className="border p-2">{row["Left Side Value"] || 'N/A'}</td>
+                      <td className="border p-2">{row["Right Side Value"] || 'N/A'}</td>
+                      <td className="border p-2">{row.Importance}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <a href="/api/download/report.xlsx" className="bg-blue-500 text-white p-2 rounded mr-2">Download Report</a>
+            <a href="/api/download/no_upload.xlsx" className="bg-blue-500 text-white p-2 rounded mr-2">Download No Upload Report</a>
+            <a href="/api/download/chart.png" className="bg-blue-500 text-white p-2 rounded">Download Chart</a>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

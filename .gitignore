@@ -1,0 +1,18 @@
+# Exclude Python virtual environment folders
+venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+# Exclude Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+# Exclude OS files
+.DS_Store
+Thumbs.db
+# Exclude log files
+*.log
+# Exclude Excel temporary files
+~$*.xlsx
+# Exclude other common sensitive files
+.env.*
