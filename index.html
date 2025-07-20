@@ -320,6 +320,10 @@
               <p className="text-2xl font-bold text-blue-600">{quickStats.totalSchools}</p>
             </div>
             <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-700">Total Uploads</h3>
+              <p className="text-2xl font-bold text-green-700">{quickStats.usersWithUploads}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
               <h3 className="text-lg font-medium text-gray-700">Upload Completion Rate</h3>
               <p className="text-2xl font-bold text-green-600">{quickStats.completionRate}%</p>
             </div>
@@ -344,13 +348,10 @@
               <p className="text-2xl font-bold text-gray-600">{quickStats.usersNoAccess}</p>
             </div>
             <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-              <h3 className="text-lg font-medium text-gray-700">All Users with Login Access</h3>
+              <h3 className="text-lg font-medium text-gray-700">Logged-in Users</h3>
               <p className="text-2xl font-bold text-teal-600">{quickStats.allUsersWithLogin}</p>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-              <h3 className="text-lg font-medium text-gray-700">Users with Uploads</h3>
-              <p className="text-2xl font-bold text-green-700">{quickStats.usersWithUploads}</p>
-            </div>
+            
             <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
               <h3 className="text-lg font-medium text-gray-700">Total Validation Violations</h3>
               <p className="text-2xl font-bold text-red-600">{quickStats.totalViolations}</p>

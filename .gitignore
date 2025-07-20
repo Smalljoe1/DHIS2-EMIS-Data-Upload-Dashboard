@@ -16,3 +16,4 @@ Thumbs.db
 ~$*.xlsx
 # Exclude other common sensitive files
 .env.*
+data/*
