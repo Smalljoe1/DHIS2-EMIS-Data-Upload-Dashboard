@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 from io import StringIO
 import os
+from dotenv import load_dotenv
 import csv
 import matplotlib
 matplotlib.use('Agg')  # Use Agg backend for non-GUI rendering
@@ -17,6 +18,9 @@ import shutil
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -78,7 +82,7 @@ def fetch_dataset_report(uid, org_units):
 # Fetch all datasets
 @app.route('/api/datasets', methods=['GET'])
 def get_datasets():
-    org_units = request.args.get('orgUnits', 'LEVEL-st3hrLkzuMb;FHlOerryBjk')  # Default to Kano state
+    org_units = request.args.get('orgUnits', 'LEVEL-st3hrLkzuMb;Ym1fEhWFWYI')  # Default to Kano state
     all_dfs = []
     for uid in DATASET_UIDS:
         df = fetch_dataset_report(uid, org_units)
@@ -93,8 +97,8 @@ def get_datasets():
 # Fetch users
 @app.route('/api/users', methods=['GET'])
 def get_users():
-    state_uid = request.args.get('orgUnits', 'LEVEL-st3hrLkzuMb;Ym1fEhWFWYI')  # Default to Yobe State
-    url = f"{BASE_URL}/users.json?fields=id,name,username,userGroups[name],userRoles[name],lastLogin,organisationUnits[ancestors[name],name,id,level]&filter=organisationUnits.ancestors.id:eq:{state_uid}&paging=true&pageSize=10000"
+    # state_uid = request.args.get('orgUnits', 'LEVEL-st3hrLkzuMb;Ym1fEhWFWYI')  # Default to Yobe State
+    url = f"{BASE_URL}/users.json?fields=id,name,username,userGroups[name],userRoles[name],lastLogin,organisationUnits[ancestors[name],name,id,level]&paging=true&pageSize=10000"
     seen_ids = set()
     users = []
     while url:
@@ -141,12 +145,19 @@ def get_orgunit_name(orgunit_id):
     except:
         return "Unknown"
 
-def get_validation_violations_batch(batch):
+def get_validation_violations_batch(batch, report_df):
     results = {}
     for orgunit_id, dataset_uids in batch:
         orgunit_name = get_orgunit_name(orgunit_id)
         print(f"\n🔍 Checking: {orgunit_name} ({orgunit_id}) - Datasets: {dataset_uids}")
         violations = []
+        # Find matching row in report_df to get State, LGA, Ward, and datasets_name
+        matching_row = report_df[report_df["School ID"] == orgunit_id].iloc[0] if not report_df.empty and orgunit_id in report_df["School ID"].values else None
+        state = matching_row["State"] if matching_row is not None else "Unknown"
+        lga = matching_row["LGA"] if matching_row is not None else "Unknown"
+        ward = matching_row["Ward"] if matching_row is not None else "Unknown"
+        dataset_name = matching_row["datasets_name"] if matching_row is not None else "Unknown"
+        
         for dataset_uid in dataset_uids:
             url = f"{BASE_URL}/33/validation/dataSet/{dataset_uid}.json?pe=2024&ou={orgunit_id}"
             try:
@@ -163,7 +174,13 @@ def get_validation_violations_batch(batch):
                 rule = v.get("validationRule", {})
                 rule_name = rule.get("name", "Unnamed Rule")
                 print(f"     - {rule_name}")
-        results[(orgunit_id, tuple(dataset_uids))] = violations
+        results[(orgunit_id, tuple(dataset_uids))] = {
+            "violations": violations,
+            "state": state,
+            "lga": lga,
+            "ward": ward,
+            "dataset_name": dataset_name
+        }
     return results
 
 # Generate report (without violations)
@@ -383,8 +400,8 @@ def get_violations():
     report_df = pd.DataFrame(report_rows)
     
     # Add Validation Rule Violations only for ⚠️ Logged in, no data upload with batching
-    violations_df = pd.DataFrame(columns=["School ID", "School Name", "Dataset UID", "Period", "Validation Rule Name", "Left Side Value", "Right Side Value", "Importance"])
-    no_upload_rows = report_df[report_df["Status"].str.startswith("⚠️")]
+    violations_df = pd.DataFrame(columns=["State", "LGA", "Ward", "School ID", "School Name", "Dataset UID", "datasets_name", "Period", "Validation Rule Name", "Left Side Value", "Right Side Value", "Importance"])
+    no_upload_rows = report_df[report_df["Status"].str.startswith("⚠️ Logged in, no data upload")]
     if not no_upload_rows.empty:
         print(f"Processing {len(no_upload_rows)} rows with ⚠️ status")
         batch_size = int(request.args.get('batchSize', 10))  # Default to 10, options: 5, 10, 15
@@ -394,12 +411,17 @@ def get_violations():
         batches = [unique_ous.iloc[i:i + batch_size][["School ID", "datasetuid"]].values.tolist() for i in range(0, len(unique_ous), batch_size)]
         
         with ThreadPoolExecutor(max_workers=4) as executor:
-            future_to_batch = {executor.submit(get_validation_violations_batch, batch): batch for batch in batches}
+            future_to_batch = {executor.submit(get_validation_violations_batch, batch, report_df): batch for batch in batches}
             for future in as_completed(future_to_batch):
                 batch = future_to_batch[future]
                 try:
                     results = future.result()
-                    for (orgunit_id, dataset_uids), violations in results.items():
+                    for (orgunit_id, dataset_uids), result in results.items():
+                        violations = result["violations"]
+                        state = result["state"]
+                        lga = result["lga"]
+                        ward = result["ward"]
+                        dataset_name = result["dataset_name"]
                         orgunit_name = get_orgunit_name(orgunit_id)
                         if not violations:
                             print("   ℹ️ No violations found.")
@@ -410,9 +432,13 @@ def get_violations():
                                 rule_name = rule.get("name", "Unnamed Rule")
                                 print(f"     - {rule_name}")
                                 violations_df = pd.concat([violations_df, pd.DataFrame([{
+                                    "State": state,
+                                    "LGA": lga,
+                                    "Ward": ward,
                                     "School ID": orgunit_id,
                                     "School Name": orgunit_name,
                                     "Dataset UID": v.get("dataSet", {}).get("id", dataset_uids[0]),  # Fallback to first dataset_uid if not in response
+                                    "datasets_name": dataset_name,
                                     "Period": v.get("period", {}).get("name", "2024"),
                                     "Validation Rule Name": rule_name,
                                     "Left Side Value": v.get("leftsideValue"),
@@ -461,7 +487,7 @@ def get_violations():
                 ws_violations.delete_rows(2, ws_violations.max_row)  # Clear existing data
             else:
                 ws_violations = wb.create_sheet("Violations")
-                headers = ["School ID", "School Name", "Dataset UID", "Period", "Validation Rule Name", "Left Side Value", "Right Side Value", "Importance"]
+                headers = ["State", "LGA", "Ward", "School ID", "School Name", "Dataset UID", "datasets_name", "Period", "Validation Rule Name", "Left Side Value", "Right Side Value", "Importance"]
                 ws_violations.append(headers)
                 for cell in ws_violations[1]:
                     cell.font = Font(bold=True)

@@ -124,6 +124,12 @@
           return sortOrder === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
         });
 
+      const filteredViolations = violations
+        .filter(v => 
+          (filterLGA ? v.LGA.toLowerCase().includes(filterLGA.toLowerCase()) : true) &&
+          (filterOrgUnit ? v["School Name"].toLowerCase().includes(filterOrgUnit.toLowerCase()) : true)
+        );
+
       const handleSort = (field) => {
         setSortField(field);
         setSortOrder(sortField === field && sortOrder === 'asc' ? 'desc' : 'asc');
@@ -139,7 +145,7 @@
 
       // General Statistics Functions
       const getQuickStats = () => {
-        if (filteredReport.length === 0) return {
+        if (filteredReport.length === 0 && filteredViolations.length === 0) return {
           totalSchools: 0,
           completionRate: 0,
           activeUsers: 0,
@@ -152,16 +158,20 @@
           totalViolations: 0
         };
 
-        const currentDate = new Date('2025-07-19T11:00:00Z'); // 11:00 AM WAT
+        const currentDate = new Date('2025-07-19T11:47:00Z'); // 11:47 PM WAT
         const reportingPeriodStart = new Date(currentDate.setDate(currentDate.getDate() - 30)).toISOString().split('T')[0]; // June 19, 2025
 
-        const uniqueSchools = new Set(filteredReport.map(row => row["School Name"])).size;
+        const uniqueSchools = new Set([...filteredReport.map(row => row["School Name"]), ...filteredViolations.map(v => v["School Name"])]).size;
         const completedSchools = filteredReport.filter(row => row.Status.startsWith("✅")).length;
         const completionRate = ((completedSchools / uniqueSchools) * 100).toFixed(1) || 0;
-        const activeUsers = new Set(filteredReport
-          .filter(row => row["Last Login"] && new Date(row["Last Login"]) >= new Date(reportingPeriodStart))
-          .flatMap(row => row.Usernames ? row.Usernames.split(',').map(name => name.trim()) : []))
-          .size;
+        const activeUsers = new Set([
+          ...filteredReport
+            .filter(row => row["Last Login"] && new Date(row["Last Login"]) >= new Date(reportingPeriodStart))
+            .flatMap(row => row.Usernames ? row.Usernames.split(',').map(name => name.trim()) : []),
+          ...filteredViolations
+            .flatMap(v => filteredReport.find(r => r["School ID"] === v["School ID"])?.Usernames?.split(',')?.map(name => name.trim()) || [])
+            .filter(name => filteredReport.some(r => r.Usernames?.includes(name) && r["Last Login"] && new Date(r["Last Login"]) >= new Date(reportingPeriodStart)))
+        ]).size;
         const pendingUploads = filteredReport.filter(row => row.Status.startsWith("⚠️")).length;
         const usersNoLogin = filteredReport
           .filter(row => row.Status.startsWith("❌"))
@@ -185,7 +195,7 @@
         const fullyCompletedDatasets = Object.values(datasetCompletion)
           .filter(data => data.completed === data.total)
           .length;
-        const totalViolations = violations.length;
+        const totalViolations = filteredViolations.length;
 
         return {
           totalSchools: uniqueSchools,
@@ -203,9 +213,9 @@
 
       // Violation Statistics by OU
       const getViolationStats = () => {
-        if (violations.length === 0) return [];
+        if (filteredViolations.length === 0) return [];
 
-        const violationCounts = violations.reduce((acc, violation) => {
+        const violationCounts = filteredViolations.reduce((acc, violation) => {
           const schoolId = violation["School ID"];
           acc[schoolId] = (acc[schoolId] || 0) + 1;
           return acc;
@@ -215,7 +225,7 @@
           .map(([schoolId, count]) => ({
             schoolId,
             count,
-            schoolName: violations.find(v => v["School ID"] === schoolId)["School Name"]
+            schoolName: filteredViolations.find(v => v["School ID"] === schoolId)["School Name"]
           }))
           .sort((a, b) => b.count - a.count)
           .slice(0, 5); // Top 5 OUs with most violations
@@ -400,23 +410,27 @@
             </div>
           )}
 
-          {showTables && violations.length > 0 && (
+          {showTables && filteredViolations.length > 0 && (
             <div className="mt-4 overflow-x-auto">
               <h2 className="text-xl font-bold mb-2">Validation Violations</h2>
               <table className="min-w-full border">
                 <thead className="bg-gray-200">
                   <tr>
-                    {["School ID", "School Name", "Dataset UID", "Period", "Validation Rule Name", "Left Side Value", "Right Side Value", "Importance"].map(field => (
+                    {["State", "LGA", "Ward", "School ID", "School Name", "Dataset UID", "Dataset Name", "Period", "Validation Rule Name", "Left Side Value", "Right Side Value", "Importance"].map(field => (
                       <th key={field} className="border p-2">{field}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {violations.map((row, index) => (
+                  {filteredViolations.map((row, index) => (
                     <tr key={index} className="bg-yellow-100">
+                      <td className="border p-2">{row.State}</td>
+                      <td className="border p-2">{row.LGA}</td>
+                      <td className="border p-2">{row.Ward}</td>
                       <td className="border p-2">{row["School ID"]}</td>
                       <td className="border p-2">{row["School Name"]}</td>
                       <td className="border p-2">{row["Dataset UID"]}</td>
+                      <td className="border p-2">{row.datasets_name}</td>
                       <td className="border p-2">{row.Period}</td>
                       <td className="border p-2">{row["Validation Rule Name"]}</td>
                       <td className="border p-2">{row["Left Side Value"] || 'N/A'}</td>
