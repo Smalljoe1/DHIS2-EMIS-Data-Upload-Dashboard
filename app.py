@@ -15,6 +15,13 @@ from openpyxl.styles import PatternFill, Font
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import shutil
+from flask import Flask, send_from_directory
+
+app = Flask(__name__)
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('static', filename)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
