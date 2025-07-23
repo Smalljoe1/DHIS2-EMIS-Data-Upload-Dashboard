@@ -1,0 +1,4 @@
+prebuild:
+  - ./build.sh
+build:
+  - pip install -r requirements.txt
