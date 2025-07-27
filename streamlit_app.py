@@ -19,20 +19,38 @@ import base64
 import json
 import io
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables with fallback to Streamlit secrets
+def load_config():
+    """Load configuration from .env file or Streamlit secrets"""
+    load_dotenv()  # Load from .env file if exists
+    
+    # Try to get API token from environment variables or secrets
+    api_token = os.getenv('DHIS2_API_TOKEN') or st.secrets.get('DHIS2_API_TOKEN')
+    
+    if not api_token:
+        st.error(
+            "API Token not configured!\n\n"
+            "For local development:\n"
+            "1. Create a .env file with: DHIS2_API_TOKEN=your_token_here\n\n"
+            "For Streamlit Cloud:\n"
+            "1. Go to Settings → Secrets and add: DHIS2_API_TOKEN=your_token_here"
+        )
+        st.stop()
+    
+    return {
+        'BASE_URL': "https://emis.dhis2nigeria.org.ng/dhis/api",
+        'API_TOKEN': api_token,
+        'HEADERS': {
+            "Content-Type": "application/json",
+            "Authorization": f"ApiToken {api_token}"
+        }
+    }
 
-# Configuration - Get API token from environment variables
-BASE_URL = "https://emis.dhis2nigeria.org.ng/dhis/api"
-API_TOKEN = os.getenv('DHIS2_API_TOKEN')
-if not API_TOKEN:
-    st.error("DHIS2_API_TOKEN not found in .env file. Please create a .env file with your API token.")
-    st.stop()
-
-HEADERS = {
-    "Content-Type": "application/json",
-    "Authorization": f"ApiToken {API_TOKEN}"
-}
+# Load configuration
+config = load_config()
+BASE_URL = config['BASE_URL']
+API_TOKEN = config['API_TOKEN']
+HEADERS = config['HEADERS']
 
 # Rest of your configuration remains the same...
 DATASET_UIDS = [
