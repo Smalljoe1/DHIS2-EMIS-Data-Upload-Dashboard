@@ -19,38 +19,63 @@ import base64
 import json
 import io
 
-# Load environment variables with fallback to Streamlit secrets
+import streamlit as st
+import os
+from dotenv import load_dotenv
+
 def load_config():
-    """Load configuration from .env file or Streamlit secrets"""
-    load_dotenv()  # Load from .env file if exists
-    
-    # Try to get API token from environment variables or secrets
-    api_token = os.getenv('DHIS2_API_TOKEN') or st.secrets.get('DHIS2_API_TOKEN')
-    
-    if not api_token:
+    """Load configuration with robust error handling and clear instructions"""
+    try:
+        # Attempt to load from .env file if available
+        load_dotenv()
+        
+        # Try both environment variables and Streamlit secrets
+        api_token = (
+            os.getenv('DHIS2_API_TOKEN') or 
+            st.secrets.get('DHIS2_API_TOKEN')
+        )
+        
+        if not api_token:
+            raise ValueError("No API token found in either .env file or Streamlit secrets")
+            
+        return {
+            'BASE_URL': "https://emis.dhis2nigeria.org.ng/dhis/api",
+            'API_TOKEN': api_token,
+            'HEADERS': {
+                "Content-Type": "application/json",
+                "Authorization": f"ApiToken {api_token}"
+            }
+        }
+        
+    except Exception as e:
         st.error(
-            "API Token not configured!\n\n"
-            "For local development:\n"
-            "1. Create a .env file with: DHIS2_API_TOKEN=your_token_here\n\n"
-            "For Streamlit Cloud:\n"
-            "1. Go to Settings → Secrets and add: DHIS2_API_TOKEN=your_token_here"
+            f"Configuration Error: {str(e)}\n\n"
+            "Setup Instructions:\n"
+            "1. For local development:\n"
+            "   - Install: pip install python-dotenv\n"
+            "   - Create .env file with: DHIS2_API_TOKEN=your_token_here\n\n"
+            "2. For Streamlit Cloud:\n"
+            "   - Add to Settings → Secrets:\n"
+            "     DHIS2_API_TOKEN=your_token_here\n\n"
+            "3. Security Note:\n"
+            "   - Never commit .env to version control\n"
+            "   - Add .env to your .gitignore file"
         )
         st.stop()
-    
-    return {
-        'BASE_URL': "https://emis.dhis2nigeria.org.ng/dhis/api",
-        'API_TOKEN': api_token,
-        'HEADERS': {
-            "Content-Type": "application/json",
-            "Authorization": f"ApiToken {api_token}"
-        }
-    }
 
-# Load configuration
-config = load_config()
-BASE_URL = config['BASE_URL']
-API_TOKEN = config['API_TOKEN']
-HEADERS = config['HEADERS']
+# Initialize configuration
+try:
+    config = load_config()
+    BASE_URL = config['BASE_URL']
+    API_TOKEN = config['API_TOKEN'] 
+    HEADERS = config['HEADERS']
+    
+    # Optional: Verify connection
+    st.session_state.config_loaded = True
+    
+except Exception as e:
+    st.error(f"Failed to initialize configuration: {str(e)}")
+    st.stop()
 
 # Rest of your configuration remains the same...
 DATASET_UIDS = [
