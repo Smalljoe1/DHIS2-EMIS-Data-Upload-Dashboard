@@ -23,60 +23,95 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 
-def load_config():
-    """Load configuration with robust error handling and clear instructions"""
-    try:
-        # Attempt to load from .env file if available
-        load_dotenv()
-        
-        # Try both environment variables and Streamlit secrets
-        api_token = (
-            os.getenv('DHIS2_API_TOKEN') or 
-            st.secrets.get('DHIS2_API_TOKEN')
-        )
-        
-        if not api_token:
-            raise ValueError("No API token found in either .env file or Streamlit secrets")
-            
-        return {
-            'BASE_URL': "https://emis.dhis2nigeria.org.ng/dhis/api",
-            'API_TOKEN': api_token,
-            'HEADERS': {
-                "Content-Type": "application/json",
-                "Authorization": f"ApiToken {api_token}"
-            }
-        }
-        
-    except Exception as e:
-        st.error(
-            f"Configuration Error: {str(e)}\n\n"
-            "Setup Instructions:\n"
-            "1. For local development:\n"
-            "   - Install: pip install python-dotenv\n"
-            "   - Create .env file with: DHIS2_API_TOKEN=your_token_here\n\n"
-            "2. For Streamlit Cloud:\n"
-            "   - Add to Settings → Secrets:\n"
-            "     DHIS2_API_TOKEN=your_token_here\n\n"
-            "3. Security Note:\n"
-            "   - Never commit .env to version control\n"
-            "   - Add .env to your .gitignore file"
-        )
-        st.stop()
+import streamlit as st
+import os
+import sys
 
-# Initialize configuration
+def load_configuration():
+    """Safely load configuration with comprehensive error handling"""
+    config = {
+        'BASE_URL': "https://emis.dhis2nigeria.org.ng/dhis/api",
+        'API_TOKEN': None,
+        'HEADERS': None
+    }
+
+    # Try to load from environment variables
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        config['API_TOKEN'] = os.getenv('DHIS2_API_TOKEN')
+    except ImportError:
+        st.warning("python-dotenv not installed - skipping .env file loading")
+    except Exception as e:
+        st.warning(f"Couldn't load .env file: {str(e)}")
+
+    # Try to load from Streamlit secrets
+    try:
+        if not config['API_TOKEN']:
+            config['API_TOKEN'] = st.secrets.get('DHIS2_API_TOKEN')
+    except Exception as e:
+        st.warning(f"Couldn't access Streamlit secrets: {str(e)}")
+
+    # Final validation
+    if not config['API_TOKEN']:
+        show_configuration_help()
+        st.stop()
+    
+    config['HEADERS'] = {
+        "Content-Type": "application/json",
+        "Authorization": f"ApiToken {config['API_TOKEN']}"
+    }
+    
+    return config
+
+def show_configuration_help():
+    """Display detailed help instructions for configuration"""
+    st.error("""
+    ## Configuration Error: API Token Not Found
+    
+    ### For Local Development:
+    1. Install required package:
+       ```bash
+       pip install python-dotenv
+       ```
+    2. Create a `.env` file in your project root with:
+       ```
+       DHIS2_API_TOKEN=your_actual_token_here
+       ```
+    3. Make sure to add `.env` to your `.gitignore`
+    
+    ### For Streamlit Cloud Deployment:
+    1. Go to your app settings
+    2. Navigate to "Secrets"
+    3. Add:
+       ```
+       DHIS2_API_TOKEN=your_actual_token_here
+       ```
+    
+    ### Security Note:
+    Never commit your actual API token to version control!
+    """)
+
+# Main app initialization
 try:
-    config = load_config()
+    # Load configuration
+    config = load_configuration()
     BASE_URL = config['BASE_URL']
-    API_TOKEN = config['API_TOKEN'] 
+    API_TOKEN = config['API_TOKEN']
     HEADERS = config['HEADERS']
     
-    # Optional: Verify connection
-    st.session_state.config_loaded = True
+    # Verify configuration
+    if not all([BASE_URL, API_TOKEN, HEADERS]):
+        show_configuration_help()
+        st.stop()
+        
+    # Start your app here
+    st.success("Configuration loaded successfully!")
+    # Rest of your app code...
     
 except Exception as e:
-    st.error(f"Failed to initialize configuration: {str(e)}")
+    st.error(f"Critical application error: {str(e)}")
     st.stop()
-
 # Rest of your configuration remains the same...
 DATASET_UIDS = [
     "MLTLNUmvS8r", "uSw8GwPO417", "W36yBpVEUkH",
