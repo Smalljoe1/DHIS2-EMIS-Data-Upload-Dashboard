@@ -14,6 +14,10 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import shutil
 import time
+from datetime import datetime, timedelta
+import base64
+import json
+import io
 
 # Configuration
 load_dotenv()
@@ -37,6 +41,47 @@ REPORT_EXCEL = os.path.join(OUTPUT_FOLDER, "State_school_user_upload_status_repo
 NO_UPLOAD_FILE = os.path.join(OUTPUT_FOLDER, "logged_in_no_upload.xlsx")
 STATUS_CHART_PATH = os.path.join(OUTPUT_FOLDER, "LGA_Status_Chart.png")
 
+# State options
+STATE_OPTIONS = [
+    {"uid": "LEVEL-st3hrLkzuMb;FHlOerryBjk", "name": "Abia State"},
+    {"uid": "LEVEL-st3hrLkzuMb;OgjFloqKoqk", "name": "Adamawa State"},
+    {"uid": "LEVEL-st3hrLkzuMb;qLiKWoddwFu", "name": "Akwa-Ibom State"},
+    {"uid": "LEVEL-st3hrLkzuMb;Nko8QFDmYmq", "name": "Anambra state"},
+    {"uid": "LEVEL-st3hrLkzuMb;ziJ3yxfgb3m", "name": "Bauchi State"},
+    {"uid": "LEVEL-st3hrLkzuMb;MXrZyuS9E7A", "name": "Benue State"},
+    {"uid": "LEVEL-st3hrLkzuMb;RLySnRCE1Gy", "name": "Borno State"},
+    {"uid": "LEVEL-st3hrLkzuMb;ns3vF75Y0bF", "name": "Bayelsa State"},
+    {"uid": "LEVEL-st3hrLkzuMb;caG44DzHu6F", "name": "Cross River State"},
+    {"uid": "LEVEL-st3hrLkzuMb;m0rZG06GdPe", "name": "Delta State"},
+    {"uid": "LEVEL-st3hrLkzuMb;xWSEoKmrbBW", "name": "Ebonyi State"},
+    {"uid": "LEVEL-st3hrLkzuMb;aMQcvAoEFh0", "name": "Edo State"},
+    {"uid": "LEVEL-st3hrLkzuMb;iilma7EajGc", "name": "Ekiti State"},
+    {"uid": "LEVEL-st3hrLkzuMb;Quac4RHRtaZ", "name": "Enugu State"},
+    {"uid": "LEVEL-st3hrLkzuMb;HYCMnXqLDPV", "name": "Federal Capital Territory"},
+    {"uid": "LEVEL-st3hrLkzuMb;bSfaEpPFa9Y", "name": "Gombe State"},
+    {"uid": "LEVEL-st3hrLkzuMb;FmOhtDnhdwU", "name": "Imo State"},
+    {"uid": "LEVEL-st3hrLkzuMb;MJVVi73YayJ", "name": "Jigawa State"},
+    {"uid": "LEVEL-st3hrLkzuMb;tjLatcokcel", "name": "Kaduna State"},
+    {"uid": "LEVEL-st3hrLkzuMb;M689V9w3Gs3", "name": "Kebbi State"},
+    {"uid": "LEVEL-st3hrLkzuMb;cTIw3RXOLCQ", "name": "Kano State"},
+    {"uid": "LEVEL-st3hrLkzuMb;S7Vs7ifJKlh", "name": "Kogi State"},
+    {"uid": "LEVEL-st3hrLkzuMb;uKlacgs9ykR", "name": "Katsina State"},
+    {"uid": "LEVEL-st3hrLkzuMb;jReUW6NCPkL", "name": "Kwara State"},
+    {"uid": "LEVEL-st3hrLkzuMb;H2ZhSMudlMI", "name": "Lagos State"},
+    {"uid": "LEVEL-st3hrLkzuMb;gzLOszDWdqM", "name": "Nasarawa State"},
+    {"uid": "LEVEL-st3hrLkzuMb;RYEnw3sMDyE", "name": "Niger State"},
+    {"uid": "LEVEL-st3hrLkzuMb;fBInDsbaQHO", "name": "Ogun State"},
+    {"uid": "LEVEL-st3hrLkzuMb;r3IK5qdHsZ6", "name": "Ondo State"},
+    {"uid": "LEVEL-st3hrLkzuMb;hfNPq5F4mjr", "name": "Osun State"},
+    {"uid": "LEVEL-st3hrLkzuMb;yx3QJHm86vW", "name": "Oyo State"},
+    {"uid": "LEVEL-st3hrLkzuMb;TFY8aaVkCtV", "name": "Plateau State"},
+    {"uid": "LEVEL-st3hrLkzuMb;BmWTbiMgEai", "name": "Rivers State"},
+    {"uid": "LEVEL-st3hrLkzuMb;Gq37IyyjUfj", "name": "Sokoto State"},
+    {"uid": "LEVEL-st3hrLkzuMb;jXngIDniC8t", "name": "Taraba State"},
+    {"uid": "LEVEL-st3hrLkzuMb;Ym1fEhWFWYI", "name": "Yobe State"},
+    {"uid": "LEVEL-st3hrLkzuMb;FmH6buccgqx", "name": "Zamfara State"}
+]
+
 # Initialize session state
 if 'report_df' not in st.session_state:
     st.session_state.report_df = None
@@ -44,6 +89,31 @@ if 'violations_df' not in st.session_state:
     st.session_state.violations_df = None
 if 'chart_generated' not in st.session_state:
     st.session_state.chart_generated = False
+if 'users_df' not in st.session_state:
+    st.session_state.users_df = None
+if 'raw_report_data' not in st.session_state:
+    st.session_state.raw_report_data = None
+if 'auto_refresh' not in st.session_state:
+    st.session_state.auto_refresh = False
+if 'refresh_interval' not in st.session_state:
+    st.session_state.refresh_interval = 300
+if 'notifications' not in st.session_state:
+    st.session_state.notifications = []
+if 'advanced_filters' not in st.session_state:
+    st.session_state.advanced_filters = {
+        'status': [],
+        'dataset': [],
+        'user_count_min': '',
+        'user_count_max': '',
+        'last_login_start': '',
+        'last_login_end': ''
+    }
+if 'export_options' not in st.session_state:
+    st.session_state.export_options = {
+        'format': 'excel',
+        'include_violations': True,
+        'selected_columns': []
+    }
 
 # Load UID-to-Name Mapping
 try:
@@ -80,6 +150,12 @@ def fetch_dataset_report(uid, org_units):
         return None
 
 def fetch_users():
+    try:
+        if os.path.exists(USER_FILE):
+            return pd.read_csv(USER_FILE)
+    except Exception as e:
+        st.warning(f"Couldn't load user data from file: {e}")
+
     url = f"{BASE_URL}/users.json?fields=id,name,username,userGroups[name],userRoles[name],lastLogin,organisationUnits[ancestors[name],name,id,level]&paging=true&pageSize=10000"
     seen_ids = set()
     users = []
@@ -133,7 +209,12 @@ def fetch_users():
     
     progress_bar.empty()
     status_text.empty()
-    return pd.DataFrame(users)
+    
+    if users:
+        users_df = pd.DataFrame(users)
+        users_df.to_csv(USER_FILE, index=False)
+        return users_df
+    return None
 
 def get_orgunit_name(orgunit_id):
     url = f"{BASE_URL}/33/organisationUnits/{orgunit_id}.json?fields=name"
@@ -184,15 +265,8 @@ def get_validation_violations_batch(batch, report_df):
         }
     return results
 
-def generate_report():
-    st.write("Fetching user data...")
-    users_df = fetch_users()
-    if users_df is None:
-        return None
-    users_df.to_csv(USER_FILE, index=False)
-    
+def generate_report(selected_state):
     st.write("Fetching dataset reports...")
-    org_units = "LEVEL-st3hrLkzuMb;Ym1fEhWFWYI"  # Default to Kano state
     all_dfs = []
     
     progress_bar = st.progress(0)
@@ -200,7 +274,7 @@ def generate_report():
     
     for i, uid in enumerate(DATASET_UIDS):
         status_text.text(f"Fetching dataset {i+1}/{len(DATASET_UIDS)}...")
-        df = fetch_dataset_report(uid, org_units)
+        df = fetch_dataset_report(uid, selected_state)
         if df is not None and not df.empty:
             all_dfs.append(df)
         progress_bar.progress((i + 1) / len(DATASET_UIDS))
@@ -216,112 +290,135 @@ def generate_report():
     final_df.to_csv(COMBINED_FILE, index=False)
     
     # Process the data
-    users_df["schoolUID_original"] = users_df["schoolUID"]
     final_df["organisationunitid_original"] = final_df["organisationunitid"]
-    users_df["schoolUID"] = users_df["schoolUID"].str.strip().str.lower().str.replace(r'[^a-z0-9]', '', regex=True)
     final_df["organisationunitid"] = final_df["organisationunitid"].str.strip().str.lower().str.replace(r'[^a-z0-9]', '', regex=True)
     
     actual_cols = [col for col in final_df.columns if "Actual reports" in col]
     final_df["Total_Actual"] = final_df[actual_cols].apply(pd.to_numeric, errors="coerce").fillna(0).sum(axis=1)
     
-    uploaded_schools = set(final_df[final_df["Total_Actual"] > 0]["organisationunitid"])
-    all_schools = set(final_df["organisationunitid"])
+    return final_df
+
+def generate_full_report():
+    # Try to load users from file first
+    st.session_state.users_df = fetch_users()
     
-    report_rows = []
-    for school_id in sorted(all_schools):
-        school_data = final_df[final_df["organisationunitid"] == school_id].iloc[0]
-        school_name = school_data["organisationunitname"]
-        original_school_id = school_data["organisationunitid_original"]
-        dataset_uid = school_data.get("datasetuid", "")
-        dataset_name = school_data.get("datasets_name", "")
-        
-        school_users = users_df[users_df["schoolUID"] == school_id].copy()
-        school_users["schoolUID"] = school_users["schoolUID_original"]
-        
-        if school_users.empty:
-            state = school_data.get("orgunitlevel2", "")
-            lga = school_data.get("orgunitlevel3", "")
-            ward = school_data.get("orgunitlevel4", "")
-            status = "🚫 No user account"
-            last_login = ""
-        else:
-            first_user = school_users.iloc[0]
-            state = school_data.get("orgunitlevel2", "")
-            lga = school_data.get("orgunitlevel3", "")
-            ward = school_data.get("orgunitlevel4", "")
-            has_login = school_users["lastLogin"].str.strip().ne("").any()
-            has_upload = school_id in uploaded_schools
-            if has_upload:
-                status = "✅ Logged in and uploaded data"
-            elif has_login:
-                status = "⚠️ Logged in, no data upload"
-            else:
-                status = "❌ User exists, yet to login"
-            if len(school_users) > 1:
-                status += f" (👥 {len(school_users)} users)"
-            last_logins = pd.to_datetime(school_users["lastLogin"], errors='coerce', utc=True).dropna()
-            last_login = last_logins.max().strftime('%Y-%m-%d %H:%M:%S UTC') if not last_logins.empty else ""
-        
-        report_rows.append({
-            "State": state,
-            "LGA": lga,
-            "Ward": ward,
-            "School ID": original_school_id,
-            "School Name": school_name,
-            "datasetuid": dataset_uid,
-            "datasets_name": dataset_name,
-            "Status": status,
-            "User Count": len(school_users),
-            "Usernames": ", ".join(school_users["username"]),
-            "Last Login": last_login
-        })
-    
-    report_df = pd.DataFrame(report_rows)
-    ordered_cols = ["State", "LGA", "Ward", "School ID", "School Name", "datasetuid", "datasets_name", "Status", "User Count", "Usernames", "Last Login"]
-    report_df = report_df[ordered_cols]
-    
-    # Save Excel file
-    temp_excel = os.path.join(OUTPUT_FOLDER, "temp_report.xlsx")
-    try:
-        report_df.to_excel(temp_excel, index=False, sheet_name="Report")
-        wb = load_workbook(temp_excel)
-        ws_report = wb["Report"]
-        
-        # Format Excel
-        for cell in ws_report[1]:
-            cell.font = Font(bold=True)
-        for column_cells in ws_report.columns:
-            max_length = max(len(str(cell.value or "")) for cell in column_cells)
-            ws_report.column_dimensions[column_cells[0].column_letter].width = max_length + 2
-        
-        status_colors = {
-            "✅ Logged in and uploaded data": "C6EFCE",
-            "⚠️ Logged in, no data upload": "FFF2CC",
-            "❌ User exists, yet to login": "F8CBAD",
-            "🚫 No user account": "D9D9D9"
-        }
-        status_col = [cell.value for cell in ws_report[1]].index("Status") + 1
-        for row in ws_report.iter_rows(min_row=2, max_row=ws_report.max_row):
-            status = row[status_col - 1].value
-            if isinstance(status, str):
-                for key, color in status_colors.items():
-                    if status.startswith(key):
-                        fill = PatternFill(start_color=color, fill_type="solid")
-                        for cell in row:
-                            cell.fill = fill
-                        break
-        
-        wb.save(temp_excel)
-        if os.path.exists(REPORT_EXCEL):
-            os.remove(REPORT_EXCEL)
-        shutil.move(temp_excel, REPORT_EXCEL)
-    except Exception as e:
-        st.error(f"Failed to save Excel file: {e}")
-        if os.path.exists(temp_excel):
-            os.remove(temp_excel)
+    if st.session_state.users_df is None:
+        st.error("No user data available. Please fetch users first.")
         return None
     
-    return report_df
+    if st.session_state.raw_report_data is None:
+        if os.path.exists(COMBINED_FILE):
+            st.session_state.raw_report_data = pd.read_csv(COMBINED_FILE)
+        else:
+            st.error("No dataset reports available. Please fetch datasets first.")
+            return None
+    
+    with st.spinner("Generating full report..."):
+        report_df = st.session_state.raw_report_data.copy()
+        users_df = st.session_state.users_df.copy()
+        
+        # Process user data
+        users_df["schoolUID_original"] = users_df["schoolUID"]
+        users_df["schoolUID"] = users_df["schoolUID"].str.strip().str.lower().str.replace(r'[^a-z0-9]', '', regex=True)
+        
+        uploaded_schools = set(report_df[report_df["Total_Actual"] > 0]["organisationunitid"])
+        all_schools = set(report_df["organisationunitid"])
+        
+        report_rows = []
+        for school_id in sorted(all_schools):
+            school_data = report_df[report_df["organisationunitid"] == school_id].iloc[0]
+            school_name = school_data["organisationunitname"]
+            original_school_id = school_data["organisationunitid_original"]
+            dataset_uid = school_data.get("datasetuid", "")
+            dataset_name = school_data.get("datasets_name", "")
+            
+            school_users = users_df[users_df["schoolUID"] == school_id].copy()
+            school_users["schoolUID"] = school_users["schoolUID_original"]
+            
+            if school_users.empty:
+                state = school_data.get("orgunitlevel2", "")
+                lga = school_data.get("orgunitlevel3", "")
+                ward = school_data.get("orgunitlevel4", "")
+                status = "🚫 No user account"
+                last_login = ""
+            else:
+                first_user = school_users.iloc[0]
+                state = school_data.get("orgunitlevel2", "")
+                lga = school_data.get("orgunitlevel3", "")
+                ward = school_data.get("orgunitlevel4", "")
+                has_login = school_users["lastLogin"].str.strip().ne("").any()
+                has_upload = school_id in uploaded_schools
+                if has_upload:
+                    status = "✅ Logged in and uploaded data"
+                elif has_login:
+                    status = "⚠️ Logged in, no data upload"
+                else:
+                    status = "❌ User exists, yet to login"
+                if len(school_users) > 1:
+                    status += f" (👥 {len(school_users)} users)"
+                last_logins = pd.to_datetime(school_users["lastLogin"], errors='coerce', utc=True).dropna()
+                last_login = last_logins.max().strftime('%Y-%m-%d %H:%M:%S UTC') if not last_logins.empty else ""
+            
+            report_rows.append({
+                "State": state,
+                "LGA": lga,
+                "Ward": ward,
+                "School ID": original_school_id,
+                "School Name": school_name,
+                "datasetuid": dataset_uid,
+                "datasets_name": dataset_name,
+                "Status": status,
+                "User Count": len(school_users),
+                "Usernames": ", ".join(school_users["username"]),
+                "Last Login": last_login
+            })
+        
+        report_df = pd.DataFrame(report_rows)
+        ordered_cols = ["State", "LGA", "Ward", "School ID", "School Name", "datasetuid", "datasets_name", "Status", "User Count", "Usernames", "Last Login"]
+        report_df = report_df[ordered_cols]
+        
+        # Save Excel file
+        temp_excel = os.path.join(OUTPUT_FOLDER, "temp_report.xlsx")
+        try:
+            report_df.to_excel(temp_excel, index=False, sheet_name="Report")
+            wb = load_workbook(temp_excel)
+            ws_report = wb["Report"]
+            
+            # Format Excel
+            for cell in ws_report[1]:
+                cell.font = Font(bold=True)
+            for column_cells in ws_report.columns:
+                max_length = max(len(str(cell.value or "")) for cell in column_cells)
+                ws_report.column_dimensions[column_cells[0].column_letter].width = max_length + 2
+            
+            status_colors = {
+                "✅ Logged in and uploaded data": "C6EFCE",
+                "⚠️ Logged in, no data upload": "FFF2CC",
+                "❌ User exists, yet to login": "F8CBAD",
+                "🚫 No user account": "D9D9D9"
+            }
+            status_col = [cell.value for cell in ws_report[1]].index("Status") + 1
+            for row in ws_report.iter_rows(min_row=2, max_row=ws_report.max_row):
+                status = row[status_col - 1].value
+                if isinstance(status, str):
+                    for key, color in status_colors.items():
+                        if status.startswith(key):
+                            fill = PatternFill(start_color=color, fill_type="solid")
+                            for cell in row:
+                                cell.fill = fill
+                            break
+            
+            wb.save(temp_excel)
+            if os.path.exists(REPORT_EXCEL):
+                os.remove(REPORT_EXCEL)
+            shutil.move(temp_excel, REPORT_EXCEL)
+        except Exception as e:
+            st.error(f"Failed to save Excel file: {e}")
+            if os.path.exists(temp_excel):
+                os.remove(temp_excel)
+            return None
+        
+        return report_df
 
 def generate_chart(report_df):
     report_df["Clean Status"] = report_df["Status"].apply(
@@ -356,13 +453,12 @@ def generate_chart(report_df):
     plt.close()
     st.session_state.chart_generated = True
 
-def generate_violations(report_df):
+def generate_violations(report_df, batch_size):
     violations_df = pd.DataFrame(columns=["State", "LGA", "Ward", "School ID", "School Name", "Dataset UID", "datasets_name", "Period", "Validation Rule Name", "Left Side Value", "Right Side Value", "Importance"])
     no_upload_rows = report_df[report_df["Status"].str.startswith("⚠️ Logged in, no data upload")]
     
     if not no_upload_rows.empty:
         st.write(f"Processing {len(no_upload_rows)} rows with ⚠️ status")
-        batch_size = st.slider("Batch size for validation checks", 5, 20, 10)
         
         # Deduplicate by School ID and collect all dataset_uids
         unique_ous = no_upload_rows.groupby("School ID")["datasetuid"].apply(list).reset_index()
@@ -474,79 +570,588 @@ def generate_violations(report_df):
     
     return violations_df
 
+def get_quick_stats(report_df, violations_df):
+    if report_df.empty and violations_df.empty:
+        return {
+            "total_schools": 0,
+            "completion_rate": 0,
+            "active_users": 0,
+            "pending_uploads": 0,
+            "fully_completed_datasets": 0,
+            "users_no_login": 0,
+            "users_no_access": 0,
+            "all_users_with_login": 0,
+            "users_with_uploads": 0,
+            "total_violations": 0
+        }
+
+    current_date = datetime.now()
+    reporting_period_start = (current_date - timedelta(days=30)).strftime('%Y-%m-%d')
+
+    unique_schools = len(report_df["School ID"].unique())
+    completed_schools = len(report_df[report_df["Status"].str.startswith("✅")])
+    completion_rate = round((completed_schools / unique_schools) * 100, 1) if unique_schools > 0 else 0
+    
+    active_users = report_df[
+        (report_df["Last Login"].notna()) & 
+        (report_df["Last Login"] >= reporting_period_start)
+    ]["Usernames"].str.split(',').explode().str.strip().nunique()
+    
+    pending_uploads = len(report_df[report_df["Status"].str.startswith("⚠️")])
+    users_no_login = report_df[
+        report_df["Status"].str.startswith("❌")
+    ]["User Count"].sum()
+    
+    users_no_access = len(report_df[
+        report_df["Status"].str.startswith("🚫")
+    ])
+    
+    all_users_with_login = report_df[
+        report_df["Status"].str.startswith("✅") | 
+        report_df["Status"].str.startswith("⚠️")
+    ]["User Count"].sum()
+    
+    users_with_uploads = report_df[
+        report_df["Status"].str.startswith("✅")
+    ]["User Count"].sum()
+    
+    dataset_completion = report_df.groupby("datasets_name")["Status"].apply(
+        lambda x: (x.str.startswith("✅").sum() / len(x) * 100)
+    ).to_dict()
+    
+    fully_completed_datasets = sum(1 for v in dataset_completion.values() if v == 100)
+    total_violations = len(violations_df)
+
+    return {
+        "total_schools": unique_schools,
+        "completion_rate": completion_rate,
+        "active_users": active_users,
+        "pending_uploads": pending_uploads,
+        "fully_completed_datasets": fully_completed_datasets,
+        "users_no_login": users_no_login,
+        "users_no_access": users_no_access,
+        "all_users_with_login": all_users_with_login,
+        "users_with_uploads": users_with_uploads,
+        "total_violations": total_violations
+    }
+
+def get_violation_stats(violations_df):
+    if violations_df.empty:
+        return []
+    
+    violation_counts = violations_df["School ID"].value_counts().head(5).to_dict()
+    return [
+        {
+            "school_id": school_id,
+            "count": count,
+            "school_name": violations_df[violations_df["School ID"] == school_id]["School Name"].iloc[0]
+        }
+        for school_id, count in violation_counts.items()
+    ]
+
+def get_download_link(file_path, file_label):
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode()
+        href = f'<a href="data:application/octet-stream;base64,{b64}" download="{os.path.basename(file_path)}">{file_label}</a>'
+        return href
+    return None
+
+def apply_advanced_filters(data, filters):
+    if not isinstance(data, pd.DataFrame) or data.empty:
+        return data
+    
+    filtered = data.copy()
+    
+    # Status filter
+    if filters['status']:
+        status_conditions = []
+        if "✅" in filters['status']:
+            status_conditions.append(filtered["Status"].str.startswith("✅"))
+        if "⚠️" in filters['status']:
+            status_conditions.append(filtered["Status"].str.startswith("⚠️"))
+        if "❌" in filters['status']:
+            status_conditions.append(filtered["Status"].str.startswith("❌"))
+        if "🚫" in filters['status']:
+            status_conditions.append(filtered["Status"].str.startswith("🚫"))
+        
+        if status_conditions:
+            filtered = filtered[pd.concat(status_conditions, axis=1).any(axis=1)]
+    
+    # Dataset filter
+    if filters['dataset']:
+        filtered = filtered[filtered["datasets_name"].isin(filters['dataset'])]
+    
+    # User count range
+    if filters['user_count_min']:
+        filtered = filtered[filtered["User Count"] >= int(filters['user_count_min'])]
+    if filters['user_count_max']:
+        filtered = filtered[filtered["User Count"] <= int(filters['user_count_max'])]
+    
+    # Last login date range
+    if filters['last_login_start']:
+        filtered = filtered[
+            (filtered["Last Login"] >= filters['last_login_start']) | 
+            (filtered["Last Login"].isna())
+        ]
+    if filters['last_login_end']:
+        filtered = filtered[
+            (filtered["Last Login"] <= filters['last_login_end']) | 
+            (filtered["Last Login"].isna())
+        ]
+    
+    return filtered
+
+def prepare_chart_data(report_df):
+    if report_df.empty:
+        return []
+    
+    status_count = report_df["Status"].apply(
+        lambda s: "Completed" if s.startswith("✅") else
+                  "Logged In, No Upload" if s.startswith("⚠️") else
+                  "No Login" if s.startswith("❌") else
+                  "No User"
+    ).value_counts().to_dict()
+    
+    return [
+        {
+            "name": "Completed",
+            "value": status_count.get("Completed", 0),
+            "color": "#4CAF50"
+        },
+        {
+            "name": "Logged In, No Upload",
+            "value": status_count.get("Logged In, No Upload", 0),
+            "color": "#FFC107"
+        },
+        {
+            "name": "No Login",
+            "value": status_count.get("No Login", 0),
+            "color": "#F44336"
+        },
+        {
+            "name": "No User",
+            "value": status_count.get("No User", 0),
+            "color": "#9E9E9E"
+        }
+    ]
+
 # Streamlit UI
-st.title("DHIS2 EMIS Data Reporting Dashboard")
+st.set_page_config(layout="wide", page_title="DHIS2 EMIS Dashboard", page_icon="📊")
 
-tab1, tab2, tab3 = st.tabs(["Generate Report", "View Data", "Download Files"])
+st.title("DHIS2 EMIS Data Upload Dashboard")
 
-with tab1:
-    st.header("Generate Report")
-    if st.button("Generate Full Report"):
-        with st.spinner("Generating report... This may take several minutes"):
-            report_df = generate_report()
-            if report_df is not None:
-                st.session_state.report_df = report_df
-                st.success("Report generated successfully!")
-                
-                # Generate chart
-                generate_chart(report_df)
-                
-                # Show preview
-                st.subheader("Report Preview")
-                st.dataframe(report_df.head(10))
-                
-                # Show chart
-                if st.session_state.chart_generated and os.path.exists(STATUS_CHART_PATH):
-                    st.subheader("LGA Status Chart")
-                    st.image(STATUS_CHART_PATH)
+# Initialize session state
+if 'selected_state' not in st.session_state:
+    st.session_state.selected_state = STATE_OPTIONS[0]['uid']
+if 'show_tables' not in st.session_state:
+    st.session_state.show_tables = True
+if 'chart_type' not in st.session_state:
+    st.session_state.chart_type = 'bar'
+
+# State selection and data fetching
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    selected_state = st.selectbox(
+        "Select State",
+        options=STATE_OPTIONS,
+        format_func=lambda x: x['name'],
+        index=0,
+        key='state_select'
+    )
+    st.session_state.selected_state = selected_state['uid']
+
+with col2:
+    batch_size = st.selectbox(
+        "Batch Size",
+        options=[5, 10, 15],
+        index=1,
+        key='batch_size_select'
+    )
+
+with col3:
+    if st.button("Fetch Datasets", key='fetch_datasets'):
+        with st.spinner("Fetching datasets..."):
+            st.session_state.raw_report_data = generate_report(selected_state['uid'])
+            if st.session_state.raw_report_data is not None:
+                st.success("Datasets fetched successfully!")
+
+with col4:
+    if st.button("Generate Full Report", key='generate_report'):
+        with st.spinner("Generating full report..."):
+            st.session_state.report_df = generate_full_report()
+            if st.session_state.report_df is not None:
+                generate_chart(st.session_state.report_df)
+                st.success("Full report generated successfully!")
+
+# Check violations button
+if st.session_state.report_df is not None:
+    if st.button("Check Violations", key='fetch_violations'):
+        with st.spinner("Checking for violations..."):
+            st.session_state.violations_df = generate_violations(st.session_state.report_df, batch_size)
+            if st.session_state.violations_df is not None:
+                st.success(f"Found {len(st.session_state.violations_df)} violations")
+
+# Auto-refresh settings
+with st.expander("Auto Refresh Settings"):
+    auto_refresh = st.checkbox("Enable Auto Refresh", value=False, key='auto_refresh')
+    refresh_interval = st.number_input(
+        "Refresh Interval (seconds)", 
+        min_value=60, 
+        max_value=3600, 
+        value=300, 
+        step=60,
+        key='refresh_interval',
+        disabled=not auto_refresh
+    )
+
+# Filter controls
+st.subheader("Filters")
+filter_col1, filter_col2 = st.columns(2)
+with filter_col1:
+    filter_lga = st.text_input("Filter by LGA", key='filter_lga')
+with filter_col2:
+    filter_org_unit = st.text_input("Filter by School Name", key='filter_org_unit')
+
+# Advanced filters
+with st.expander("Advanced Filters"):
+    status_options = [
+        {"value": "✅", "label": "Logged in and uploaded data"},
+        {"value": "⚠️", "label": "Logged in, no data upload"},
+        {"value": "❌", "label": "User exists, yet to login"},
+        {"value": "🚫", "label": "No user account"}
+    ]
+    
+    selected_status = st.multiselect(
+        "Status",
+        options=status_options,
+        format_func=lambda x: x['label'],
+        default=[],
+        key='status_filter'
+    )
+    st.session_state.advanced_filters['status'] = [s['value'] for s in selected_status]
     
     if st.session_state.report_df is not None:
-        if st.button("Check for Validation Violations"):
-            with st.spinner("Checking for validation violations... This may take a while"):
-                violations_df = generate_violations(st.session_state.report_df)
-                st.session_state.violations_df = violations_df
-                if violations_df.empty:
-                    st.info("No validation violations found")
-                else:
-                    st.success(f"Found {len(violations_df)} validation violations")
-                    st.dataframe(violations_df.head(10))
-
-with tab2:
-    st.header("View Data")
-    if st.session_state.report_df is not None:
-        st.subheader("Main Report")
-        st.dataframe(st.session_state.report_df)
-        
-        if st.session_state.chart_generated and os.path.exists(STATUS_CHART_PATH):
-            st.subheader("LGA Status Chart")
-            st.image(STATUS_CHART_PATH)
-        
-        if st.session_state.violations_df is not None:
-            st.subheader("Validation Violations")
-            st.dataframe(st.session_state.violations_df)
-    else:
-        st.info("No report generated yet. Please generate a report first.")
-
-with tab3:
-    st.header("Download Files")
-    if os.path.exists(REPORT_EXCEL):
-        with open(REPORT_EXCEL, "rb") as f:
-            st.download_button(
-                label="Download Full Report (Excel)",
-                data=f,
-                file_name="State_school_user_upload_status_report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-    else:
-        st.warning("Report Excel file not found. Please generate a report first.")
+        dataset_options = st.session_state.report_df['datasets_name'].unique()
+        selected_datasets = st.multiselect(
+            "Datasets",
+            options=dataset_options,
+            default=[],
+            key='dataset_filter'
+        )
+        st.session_state.advanced_filters['dataset'] = selected_datasets
     
-    if st.session_state.chart_generated and os.path.exists(STATUS_CHART_PATH):
-        with open(STATUS_CHART_PATH, "rb") as f:
-            st.download_button(
-                label="Download Status Chart (PNG)",
-                data=f,
-                file_name="LGA_Status_Chart.png",
-                mime="image/png"
+    user_count_col1, user_count_col2 = st.columns(2)
+    with user_count_col1:
+        user_count_min = st.number_input(
+            "Min User Count",
+            min_value=0,
+            value=0,
+            key='user_count_min'
+        )
+        st.session_state.advanced_filters['user_count_min'] = user_count_min if user_count_min > 0 else ''
+    
+    with user_count_col2:
+        user_count_max = st.number_input(
+            "Max User Count",
+            min_value=0,
+            value=0,
+            key='user_count_max'
+        )
+        st.session_state.advanced_filters['user_count_max'] = user_count_max if user_count_max > 0 else ''
+    
+    login_date_col1, login_date_col2 = st.columns(2)
+    with login_date_col1:
+        last_login_start = st.date_input(
+            "Last Login After",
+            value=None,
+            key='last_login_start'
+        )
+        st.session_state.advanced_filters['last_login_start'] = last_login_start.strftime('%Y-%m-%d') if last_login_start else ''
+    
+    with login_date_col2:
+        last_login_end = st.date_input(
+            "Last Login Before",
+            value=None,
+            key='last_login_end'
+        )
+        st.session_state.advanced_filters['last_login_end'] = last_login_end.strftime('%Y-%m-%d') if last_login_end else ''
+
+# Apply filters to data
+filtered_report = pd.DataFrame()
+filtered_violations = pd.DataFrame()
+
+if st.session_state.report_df is not None:
+    filtered_report = st.session_state.report_df.copy()
+    
+    # Apply basic filters
+    if filter_lga:
+        filtered_report = filtered_report[filtered_report['LGA'].str.contains(filter_lga, case=False, na=False)]
+    if filter_org_unit:
+        filtered_report = filtered_report[filtered_report['School Name'].str.contains(filter_org_unit, case=False, na=False)]
+    
+    # Apply advanced filters
+    filtered_report = apply_advanced_filters(filtered_report, st.session_state.advanced_filters)
+
+if st.session_state.violations_df is not None:
+    filtered_violations = st.session_state.violations_df.copy()
+    if filter_lga:
+        filtered_violations = filtered_violations[filtered_violations['LGA'].str.contains(filter_lga, case=False, na=False)]
+    if filter_org_unit:
+        filtered_violations = filtered_violations[filtered_violations['School Name'].str.contains(filter_org_unit, case=False, na=False)]
+
+# Quick statistics
+quick_stats = get_quick_stats(filtered_report, filtered_violations)
+violation_stats = get_violation_stats(filtered_violations)
+
+# Display statistics
+st.subheader("Key Metrics")
+metric_cols = st.columns(5)
+with metric_cols[0]:
+    st.metric("Total Schools", quick_stats['total_schools'])
+with metric_cols[1]:
+    st.metric("Completion Rate", f"{quick_stats['completion_rate']}%")
+with metric_cols[2]:
+    st.metric("Active Users", quick_stats['active_users'])
+with metric_cols[3]:
+    st.metric("Pending Uploads", quick_stats['pending_uploads'])
+with metric_cols[4]:
+    st.metric("Validation Violations", quick_stats['total_violations'])
+
+# More detailed statistics
+st.subheader("Detailed Statistics")
+stats_col1, stats_col2, stats_col3, stats_col4 = st.columns(4)
+with stats_col1:
+    st.metric("Fully Completed Datasets", quick_stats['fully_completed_datasets'])
+with stats_col2:
+    st.metric("Users Without Login", quick_stats['users_no_login'])
+with stats_col3:
+    st.metric("Schools Without Users", quick_stats['users_no_access'])
+with stats_col4:
+    st.metric("Users With Uploads", quick_stats['users_with_uploads'])
+
+# Charts
+if st.session_state.report_df is not None:
+    st.subheader("Data Visualization")
+    
+    chart_tab1, chart_tab2 = st.tabs(["Status Distribution", "LGA Performance"])
+    
+    with chart_tab1:
+        chart_type = st.selectbox(
+            "Chart Type",
+            options=['bar', 'pie', 'line'],
+            index=0,
+            key='chart_type_select'
+        )
+        
+        chart_data = prepare_chart_data(filtered_report)
+        
+        if chart_data:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            if chart_type == 'bar':
+                df = pd.DataFrame(chart_data)
+                sns.barplot(data=df, x='name', y='value', palette=[d['color'] for d in chart_data], ax=ax)
+                ax.set_title("Upload Status Distribution")
+                ax.set_xlabel("Status")
+                ax.set_ylabel("Count")
+                plt.xticks(rotation=45)
+                
+            elif chart_type == 'pie':
+                df = pd.DataFrame(chart_data)
+                ax.pie(
+                    df['value'],
+                    labels=df['name'],
+                    colors=[d['color'] for d in chart_data],
+                    autopct='%1.1f%%',
+                    startangle=90
+                )
+                ax.set_title("Upload Status Distribution")
+                ax.axis('equal')
+                
+            elif chart_type == 'line':
+                df = pd.DataFrame(chart_data)
+                sns.lineplot(data=df, x='name', y='value', marker='o', color='#8884d8', ax=ax)
+                ax.set_title("Upload Status Distribution")
+                ax.set_xlabel("Status")
+                ax.set_ylabel("Count")
+                plt.xticks(rotation=45)
+            
+            st.pyplot(fig)
+    
+    with chart_tab2:
+        if not filtered_report.empty:
+            lga_stats = filtered_report.groupby('LGA').agg(
+                Total=('Status', 'count'),
+                Completed=('Status', lambda x: sum(x.str.startswith("✅"))),
+            ).reset_index()
+            lga_stats['Completion Rate'] = (lga_stats['Completed'] / lga_stats['Total'] * 100).round(1)
+            
+            top_lgas = lga_stats.nlargest(10, 'Completion Rate')
+            
+            fig, ax = plt.subplots(figsize=(12, 6))
+            sns.barplot(data=top_lgas, x='LGA', y='Completion Rate', palette='viridis', ax=ax)
+            ax.set_title("Top 10 LGAs by Completion Rate")
+            ax.set_xlabel("LGA")
+            ax.set_ylabel("Completion Rate (%)")
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
+
+# Top violations
+if violation_stats:
+    st.subheader("Top Schools with Validation Violations")
+    cols = st.columns(len(violation_stats))
+    for i, stat in enumerate(violation_stats):
+        with cols[i]:
+            st.metric(
+                label=f"{stat['school_name']}",
+                value=stat['count'],
+                help=f"School ID: {stat['school_id']}"
             )
-    else:
-        st.warning("Status chart not found. Please generate a report first.")
+
+# Data tables
+show_tables = st.checkbox("Show Data Tables", value=True, key='show_tables_checkbox')
+
+if show_tables and st.session_state.report_df is not None:
+    st.subheader("School Report Data")
+    st.dataframe(
+        filtered_report,
+        use_container_width=True,
+        height=400,
+        column_config={
+            "Status": st.column_config.TextColumn(
+                "Status",
+                help="Status of data upload",
+                width="medium"
+            ),
+            "User Count": st.column_config.NumberColumn(
+                "User Count",
+                help="Number of users associated",
+                width="small"
+            )
+        }
+    )
+
+if show_tables and st.session_state.violations_df is not None and not filtered_violations.empty:
+    st.subheader("Validation Violations")
+    st.dataframe(
+        filtered_violations,
+        use_container_width=True,
+        height=400
+    )
+
+# Export options
+with st.expander("Export Data"):
+    export_col1, export_col2, export_col3 = st.columns(3)
+    
+    with export_col1:
+        export_format = st.selectbox(
+            "Format",
+            options=["excel", "csv", "json"],
+            key='export_format'
+        )
+        st.session_state.export_options['format'] = export_format
+    
+    with export_col2:
+        include_violations = st.checkbox(
+            "Include Violations",
+            value=True,
+            key='include_violations'
+        )
+        st.session_state.export_options['include_violations'] = include_violations
+    
+    with export_col3:
+        st.write("")  # Spacer
+        if st.button("Generate Export", key='generate_export'):
+            with st.spinner("Preparing export..."):
+                # Prepare data for export
+                export_data = filtered_report.copy()
+                
+                if include_violations and st.session_state.violations_df is not None:
+                    export_data = pd.concat([export_data, filtered_violations], axis=0)
+                
+                # Select only the chosen columns
+                if st.session_state.export_options['selected_columns']:
+                    export_data = export_data[st.session_state.export_options['selected_columns']]
+                
+                # Create download link based on format
+                if export_format == 'excel':
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        export_data.to_excel(writer, index=False, sheet_name='Report')
+                        if include_violations and not filtered_violations.empty:
+                            filtered_violations.to_excel(writer, index=False, sheet_name='Violations')
+                    output.seek(0)
+                    st.download_button(
+                        label="Download Excel",
+                        data=output,
+                        file_name=f"emis_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                
+                elif export_format == 'csv':
+                    csv = export_data.to_csv(index=False)
+                    st.download_button(
+                        label="Download CSV",
+                        data=csv,
+                        file_name=f"emis_export_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+                
+                elif export_format == 'json':
+                    json_data = export_data.to_json(orient='records')
+                    st.download_button(
+                        label="Download JSON",
+                        data=json_data,
+                        file_name=f"emis_export_{datetime.now().strftime('%Y%m%d')}.json",
+                        mime="application/json"
+                    )
+
+# Column selection for export
+if st.session_state.report_df is not None:
+    st.write("Select columns to include in export:")
+    col_options = st.session_state.report_df.columns.tolist()
+    selected_cols = st.multiselect(
+        "Columns",
+        options=col_options,
+        default=["State", "LGA", "Ward", "School ID", "School Name", "datasets_name", "Status", "User Count", "Usernames", "Last Login"],
+        key='export_columns'
+    )
+    st.session_state.export_options['selected_columns'] = selected_cols
+
+# Download links
+st.subheader("Download Reports")
+if os.path.exists(REPORT_EXCEL):
+    with open(REPORT_EXCEL, "rb") as f:
+        st.download_button(
+            label="Download Full Report (Excel)",
+            data=f,
+            file_name="State_school_user_upload_status_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+if st.session_state.chart_generated and os.path.exists(STATUS_CHART_PATH):
+    with open(STATUS_CHART_PATH, "rb") as f:
+        st.download_button(
+            label="Download Status Chart (PNG)",
+            data=f,
+            file_name="LGA_Status_Chart.png",
+            mime="image/png"
+        )
+
+# Notifications
+if st.session_state.notifications:
+    with st.expander("Notifications", expanded=True):
+        for notification in st.session_state.notifications[-3:]:  # Show last 3 notifications
+            if notification['type'] == 'success':
+                st.success(notification['message'])
+            elif notification['type'] == 'error':
+                st.error(notification['message'])
+            else:
+                st.info(notification['message'])
+
+# Auto-refresh logic
+if auto_refresh:
+    time.sleep(refresh_interval)
+    st.rerun()
