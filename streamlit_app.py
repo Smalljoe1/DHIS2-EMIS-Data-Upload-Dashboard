@@ -19,13 +19,22 @@ import base64
 import json
 import io
 
-# Configuration
+# Load environment variables from .env file
 load_dotenv()
+
+# Configuration - Get API token from environment variables
 BASE_URL = "https://emis.dhis2nigeria.org.ng/dhis/api"
+API_TOKEN = os.getenv('DHIS2_API_TOKEN')
+if not API_TOKEN:
+    st.error("DHIS2_API_TOKEN not found in .env file. Please create a .env file with your API token.")
+    st.stop()
+
 HEADERS = {
     "Content-Type": "application/json",
-    "Authorization": f"ApiToken {os.getenv('DHIS2_API_TOKEN', 'd2pat_DAULytLK7GUBSlfknZ6ffVxIfifC8T9c3885349470')}"
+    "Authorization": f"ApiToken {API_TOKEN}"
 }
+
+# Rest of your configuration remains the same...
 DATASET_UIDS = [
     "MLTLNUmvS8r", "uSw8GwPO417", "W36yBpVEUkH",
     "pJydop5Fpsz", "XERITHzkeSI", "RlfDdEEZ317"
