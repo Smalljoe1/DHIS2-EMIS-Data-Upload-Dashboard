@@ -19,99 +19,21 @@ import base64
 import json
 import io
 
-import streamlit as st
-import os
-from dotenv import load_dotenv
+# Load environment variables from .env file
+load_dotenv()
 
-import streamlit as st
-import os
-import sys
-
-def load_configuration():
-    """Safely load configuration with comprehensive error handling"""
-    config = {
-        'BASE_URL': "https://emis.dhis2nigeria.org.ng/dhis/api",
-        'API_TOKEN': None,
-        'HEADERS': None
-    }
-
-    # Try to load from environment variables
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        config['API_TOKEN'] = os.getenv('DHIS2_API_TOKEN')
-    except ImportError:
-        st.warning("python-dotenv not installed - skipping .env file loading")
-    except Exception as e:
-        st.warning(f"Couldn't load .env file: {str(e)}")
-
-    # Try to load from Streamlit secrets
-    try:
-        if not config['API_TOKEN']:
-            config['API_TOKEN'] = st.secrets.get('DHIS2_API_TOKEN')
-    except Exception as e:
-        st.warning(f"Couldn't access Streamlit secrets: {str(e)}")
-
-    # Final validation
-    if not config['API_TOKEN']:
-        show_configuration_help()
-        st.stop()
-    
-    config['HEADERS'] = {
-        "Content-Type": "application/json",
-        "Authorization": f"ApiToken {config['API_TOKEN']}"
-    }
-    
-    return config
-
-def show_configuration_help():
-    """Display detailed help instructions for configuration"""
-    st.error("""
-    ## Configuration Error: API Token Not Found
-    
-    ### For Local Development:
-    1. Install required package:
-       ```bash
-       pip install python-dotenv
-       ```
-    2. Create a `.env` file in your project root with:
-       ```
-       DHIS2_API_TOKEN=your_actual_token_here
-       ```
-    3. Make sure to add `.env` to your `.gitignore`
-    
-    ### For Streamlit Cloud Deployment:
-    1. Go to your app settings
-    2. Navigate to "Secrets"
-    3. Add:
-       ```
-       DHIS2_API_TOKEN=your_actual_token_here
-       ```
-    
-    ### Security Note:
-    Never commit your actual API token to version control!
-    """)
-
-# Main app initialization
-try:
-    # Load configuration
-    config = load_configuration()
-    BASE_URL = config['BASE_URL']
-    API_TOKEN = config['API_TOKEN']
-    HEADERS = config['HEADERS']
-    
-    # Verify configuration
-    if not all([BASE_URL, API_TOKEN, HEADERS]):
-        show_configuration_help()
-        st.stop()
-        
-    # Start your app here
-    st.success("Configuration loaded successfully!")
-    # Rest of your app code...
-    
-except Exception as e:
-    st.error(f"Critical application error: {str(e)}")
+# Configuration - Get API token from environment variables
+BASE_URL = "https://emis.dhis2nigeria.org.ng/dhis/api"
+API_TOKEN = os.getenv('DHIS2_API_TOKEN')
+if not API_TOKEN:
+    st.error("DHIS2_API_TOKEN not found in .env file. Please create a .env file with your API token.")
     st.stop()
+
+HEADERS = {
+    "Content-Type": "application/json",
+    "Authorization": f"ApiToken {API_TOKEN}"
+}
+
 # Rest of your configuration remains the same...
 DATASET_UIDS = [
     "MLTLNUmvS8r", "uSw8GwPO417", "W36yBpVEUkH",
